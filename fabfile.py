@@ -25,6 +25,14 @@ def test(args=None):
         args = ""
     print(local('nosetests -sv --with-doctest %s' % args, capture=False))
 
+def pylint:
+    """
+    Run pylint on fabric/ 
+    
+    Do so with the config file in tests/
+    """
+    print(local('pylint --rcfile=tests/pylintrc fabric/', capture=False))
+
 
 def build_docs(clean='no', browse='no'):
     """
