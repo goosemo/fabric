@@ -25,7 +25,7 @@ def test(args=None):
         args = ""
     print(local('nosetests -sv --with-doctest %s' % args, capture=False))
 
-def pylint:
+def pylint():
     """
     Run pylint on fabric/ 
     
