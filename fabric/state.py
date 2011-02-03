@@ -203,8 +203,16 @@ env_options = [
         action='store_false',
         default=True,
         help="do not use pseudo-terminal in run/sudo"
-    )
-    
+    ),
+   
+    # Using .ssh/config file 
+    make_option('-S', '--ssh-config',
+        dest='use_ssh_config',
+        action='store_true',
+        default=False,
+        help='force usage .ssh/config file'
+    ),
+        
 ]
 
 
@@ -243,7 +251,9 @@ env = _AttributeDict({
     'sudo_prompt': 'sudo password:',
     'use_shell': True,
     'user': None,
-    'version': get_version('short')
+    'version': get_version('short'),
+    'local_home': os.environ.get('HOME'),
+    'local_ssh_config': os.path.join(os.environ.get('HOME'), '.ssh/config'),
 })
 
 # Add in option defaults
