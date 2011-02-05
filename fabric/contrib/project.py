@@ -12,7 +12,7 @@ from fabric.state import env, output
 
 @needs_host
 def rsync_project(remote_dir, local_dir=None, exclude=(), delete=False,
-    extra_opts=''):
+    extra_opts='', default_opts=''):
     """
     Synchronize a remote directory with the current project directory via rsync.
 
@@ -47,6 +47,8 @@ def rsync_project(remote_dir, local_dir=None, exclude=(), delete=False,
       longer exist locally. Defaults to False.
     * ``extra_opts``: an optional, arbitrary string which you may use to pass
       custom arguments or options to ``rsync``.
+    * ``default_opts``: an optional, arbitrary string which you may use to pass
+      an override to the normal default option provided "-pthrvz".
 
     Furthermore, this function transparently honors Fabric's port and SSH key
     settings. Calling this function when the current host string contains a
@@ -86,9 +88,10 @@ def rsync_project(remote_dir, local_dir=None, exclude=(), delete=False,
         'delete': '--delete' if delete else '',
         'exclude': exclude_opts % exclusions,
         'rsh': rsh_string,
-        'extra': extra_opts
+        'extra': extra_opts,
+        'default_opts': default_opts if default_opts else '-pthrvz',
     }
-    options = "%(delete)s%(exclude)s -pthrvz %(extra)s %(rsh)s" % options_map
+    options = "%(delete)s%(exclude)s %(default_opts)s %(extra)s %(rsh)s" % options_map
     # Get local directory
     if local_dir is None:
         local_dir = '../' + getcwd().split(sep)[-1]
