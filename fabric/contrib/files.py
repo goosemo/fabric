@@ -209,7 +209,7 @@ def comment(filename, regex, use_sudo=False, char='#', backup='.bak'):
         regex = regex[1:]
     if regex.endswith('$'):
         dollar = '$'
-        regex = regex[:1]
+        regex = regex[:-1]
     regex = "%s(%s)%s" % (carot, regex, dollar)
     return sed(
         filename,
