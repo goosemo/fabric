@@ -746,14 +746,6 @@ def _execute(channel, command, pty=True, combine_stderr=True,
             ThreadHandler('in', input_loop, channel, using_pty)
         )
 
-        while True:
-            if channel.exit_status_ready():
-                break
-            else:
-                for worker in workers:
-                    e = worker.exception
-                    if e:
-                        raise e[0], e[1], e[2]
 
         # Obtain exit code of remote program now that we're done.
         status = channel.recv_exit_status()
@@ -761,6 +753,12 @@ def _execute(channel, command, pty=True, combine_stderr=True,
         # Wait for threads to exit so we aren't left with stale threads
         for worker in workers:
             worker.thread.join()
+            
+        for worker in workers:
+            e = worker.exception
+            if e:
+                raise e[0], e[1], e[2]
+            
 
         # Close channel
         channel.close()

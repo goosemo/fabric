@@ -114,7 +114,7 @@ def input_loop(chan, using_pty):
         if win32:
             have_char = msvcrt.kbhit()
         else:
-            r, w, x = select([sys.stdin], [], [], 0.0)
+            r, w, x = select([sys.stdin], [], [], 0.1)
             have_char = (r and r[0] == sys.stdin)
         if have_char:
             # Send all local stdin to remote end's stdin
@@ -126,3 +126,4 @@ def input_loop(chan, using_pty):
                 # output level, don't want it to be accidentally hidden
                 sys.stdout.write(byte)
                 sys.stdout.flush()
+
