@@ -228,6 +228,7 @@ env = _AttributeDict({
     'echo_stdin': True,
     'host': None,
     'host_string': None,
+    'lcwd': '', # Must be empty string, not None, for concatenation purposes
     'local_user': _get_system_username(),
     'output_prefix': True,
     'passwords': {},
@@ -354,3 +355,10 @@ output = _AliasDict({
     'everything': ['warnings', 'running', 'user', 'output'],
     'output': ['stdout', 'stderr']
 })
+
+
+#
+# I/O loop sleep parameter (in seconds)
+#
+
+io_sleep = 0.01
