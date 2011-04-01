@@ -1,10 +1,11 @@
 from __future__ import with_statement
 
 import sys
+import time
 from select import select
 
 from fabric.context_managers import settings, char_buffered
-from fabric.state import env, output, win32
+from fabric.state import env, output, win32, io_sleep
 from fabric.auth import get_password, set_password
 import fabric.network
 
@@ -113,6 +114,7 @@ def input_loop(chan, using_pty):
     while not chan.exit_status_ready():
         if win32:
             have_char = msvcrt.kbhit()
+            time.sleep(io_sleep)
         else:
             r, w, x = select([sys.stdin], [], [], 0.1)
             have_char = (r and r[0] == sys.stdin)
