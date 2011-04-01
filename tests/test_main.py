@@ -7,14 +7,16 @@ from nose.tools import eq_, raises
 
 from fabric.decorators import hosts, roles
 from fabric.main import (get_hosts, parse_arguments, _merge, _escape_split,
-        load_fabfile)
+        load_fabfile, parse_options)
 import fabric.state
 from fabric.state import _AttributeDict
 
 from utils import mock_streams
 
-
 def test_argument_parsing():
+    """
+    Test arg set for parsing
+    """ 
     for args, output in [
         # Basic 
         ('abc', ('abc', [], {}, [], [])),
@@ -39,6 +41,33 @@ def test_argument_parsing():
         ("task:foo,,x=y", ('task', ['foo', ''], {'x': 'y'}, [], [])),
     ]:
         yield eq_, parse_arguments([args]), [output]
+
+fake_task_aliases = {
+        'test1': 'task',
+        'test2': 'a:b=c,d=e',
+        'test3': 'abc:host=foo',
+        'test4': '--hosts=hostA,hostB,hostC abc:host=foo',
+}
+
+@with_patched_object(
+    'fabric.state', 'env', _AttributeDict({'task_aliases':fake_task_aliases})
+)
+def test_option_parsing():
+    """
+    Test option parsing
+    """
+    for options, output in [
+        # Task aliasing
+        ('test1', ('task', [],{}, [], [])),
+        ('test2', ('a', [], {'b':'c','d':'e'}, [], [])),
+        ('test3', ('abc', [], {}, ['foo'], [])),
+        ('test4', ('abc', [], {}, ['foo'], [])),
+    ]:
+        parser, options, args = parse_options(options.split())
+        print options
+        print args
+#       eq_((args, [], options.roles, options.hosts, []), output)
+        eq_(parse_arguments(args), [output])
 
 
 def eq_hosts(command, host_list):

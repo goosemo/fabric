@@ -144,7 +144,7 @@ def load_fabfile(path, importer=None):
     return imported.__doc__, tasks
 
 
-def parse_options():
+def parse_options(argv_for_testing=None):
     """
     Handle command-line options with optparse.OptionParser.
 
@@ -203,8 +203,21 @@ def parse_options():
     # Finalize
     #
 
+    # Incorperate any task aliases
+    sys_args = sys.argv[1:]
+    if argv_for_testing:
+        sys_args = argv_for_testing
+
+    if hasattr(state.env, 'task_aliases'):
+        for k,v in state.env.task_aliases.iteritems():
+            if k in sys_args:
+                spot = sys_args.index(k)
+                del sys_args[spot]
+                for val in reversed(v.split()):
+                    sys_args.insert(spot, val)
+
     # Return three-tuple of parser + the output from parse_args (opt obj, args)
-    opts, args = parser.parse_args()
+    opts, args = parser.parse_args(sys_args)
     return parser, opts, args
 
 
