@@ -47,6 +47,8 @@ fake_task_aliases = {
         'test2': 'a:b=c,d=e',
         'test3': 'abc:host=foo',
         'test4': '--hosts=hostA,hostB,hostC abc:host=foo',
+        'deploy': ("production --hide=everything make_docs make_bin:2 "
+            "version_tic:verfile='path/to/version_file' push_up"),
 }
 
 @with_patched_object(
@@ -58,16 +60,21 @@ def test_option_parsing():
     """
     for options, output in [
         # Task aliasing
-        ('test1', ('task', [],{}, [], [])),
-        ('test2', ('a', [], {'b':'c','d':'e'}, [], [])),
-        ('test3', ('abc', [], {}, ['foo'], [])),
-        ('test4', ('abc', [], {}, ['foo'], [])),
+        ('test1', [('task', [],{}, [], [])]),
+        ('test2', [('a', [], {'b':'c','d':'e'}, [], [])]),
+        ('test3', [('abc', [], {}, ['foo'], [])]),
+        ('test4', [('abc', [], {}, ['foo'], [])]),
+        ('deploy', [
+            ('production', [], {}, [], []), 
+            ('make_docs', [], {}, [], []), 
+            ('make_bin', ['2'], {}, [], []), 
+            ('version_tic', [], {'verfile': "'path/to/version_file'"}, [], []), 
+            ('push_up', [], {}, [], [])
+            ]),
     ]:
-        parser, options, args = parse_options(options.split())
-        print options
-        print args
-#       eq_((args, [], options.roles, options.hosts, []), output)
-        eq_(parse_arguments(args), [output])
+        parser, opts, args = parse_options(options.split())
+        print opts
+        eq_(parse_arguments(args), output)
 
 
 def eq_hosts(command, host_list):

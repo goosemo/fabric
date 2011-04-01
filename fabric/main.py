@@ -144,7 +144,7 @@ def load_fabfile(path, importer=None):
     return imported.__doc__, tasks
 
 
-def parse_options(argv_for_testing=None):
+def parse_options(custom_argv=None):
     """
     Handle command-line options with optparse.OptionParser.
 
@@ -203,14 +203,17 @@ def parse_options(argv_for_testing=None):
     # Finalize
     #
 
-    # Incorperate any task aliases
+    # Prep for putting in argv explicitly if needed
     sys_args = sys.argv[1:]
-    if argv_for_testing:
-        sys_args = argv_for_testing
+    if custom_argv:
+        sys_args = custom_argv
 
+    # Incorperate any task aliases
     if hasattr(state.env, 'task_aliases'):
         for k,v in state.env.task_aliases.iteritems():
             if k in sys_args:
+                # Find the spot where the placeholder is, remove it, and then
+                # insert into it's place the args/options it needs
                 spot = sys_args.index(k)
                 del sys_args[spot]
                 for val in reversed(v.split()):
@@ -423,6 +426,22 @@ def main():
     Main command-line execution loop.
     """
     try:
+  
+        # Find local fabfile path or abort
+        fabfile = find_fabfile()
+        if not fabfile and not remainder_arguments:
+            abort("Couldn't find any fabfiles!")
+
+        # Store absolute path to fabfile in case anyone needs it
+        state.env.real_fabfile = fabfile
+
+        # Load fabfile (which calls its module-level code, including
+        # tweaks to env values) and put its commands in the shared commands
+        # dict
+        if fabfile:
+            docstring, callables = load_fabfile(fabfile)
+            commands.update(callables)
+      
         # Parse command line options
         parser, options, arguments = parse_options()
 
@@ -459,21 +478,6 @@ def main():
 
         # Load settings from user settings file, into shared env dict.
         state.env.update(load_settings(state.env.rcfile))
-
-        # Find local fabfile path or abort
-        fabfile = find_fabfile()
-        if not fabfile and not remainder_arguments:
-            abort("Couldn't find any fabfiles!")
-
-        # Store absolute path to fabfile in case anyone needs it
-        state.env.real_fabfile = fabfile
-
-        # Load fabfile (which calls its module-level code, including
-        # tweaks to env values) and put its commands in the shared commands
-        # dict
-        if fabfile:
-            docstring, callables = load_fabfile(fabfile)
-            commands.update(callables)
 
         # Abort if no commands found
         if not commands and not remainder_arguments:
