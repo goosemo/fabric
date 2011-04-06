@@ -8,6 +8,7 @@ from fabric.context_managers import settings, char_buffered
 from fabric.state import env, output, win32, io_sleep
 from fabric.auth import get_password, set_password
 import fabric.network
+from fabric.logger import logger
 
 if win32:
     import msvcrt
