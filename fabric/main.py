@@ -26,7 +26,7 @@ from fabric.decorators import is_parallel, is_sequential, needs_multiprocessing
 from job_queue import Job_Queue
 
 # One-time calculation of "all internal callables" to avoid doing this on every
-# check of a given fabfile callable (in is_task()).
+# check of a given fabfile callable (in is_classic_task()).
 _modules = [api, project, files, console]
 _internals = reduce(lambda x, y: x + filter(callable, vars(y).values()),
     _modules,
@@ -112,7 +112,7 @@ def find_fabfile():
     # Implicit 'return None' if nothing was found
 
 
-def is_task(tup):
+def is_classic_task(tup):
     """
     Takes (name, object) tuple, returns True if it's a non-Fab public callable.
     """
@@ -164,11 +164,11 @@ def load_fabfile(path, importer=None):
         del sys.path[0]
 
     # Actually load tasks
-    docstring, new_style, classic = load_tasks_from_module(imported)
+    docstring, new_style, classic, default = load_tasks_from_module(imported)
     tasks = new_style if state.env.new_style_tasks else classic
     # Clean up after ourselves
     _seen.clear()
-    return docstring, tasks
+    return docstring, tasks, default
 
 
 def load_tasks_from_module(imported):
@@ -185,30 +185,48 @@ def load_tasks_from_module(imported):
     # Return a two-tuple value.  First is the documentation, second is a
     # dictionary of callables only (and don't include Fab operations or
     # underscored callables)
-    new_style, classic = extract_tasks(imported_vars)
-    return imported.__doc__, new_style, classic
+    new_style, classic, default = extract_tasks(imported_vars)
+    return imported.__doc__, new_style, classic, default
+
+
+# For attribute tomfoolery
+class _Dict(dict):
+    pass
 
 
 def extract_tasks(imported_vars):
     """
     Handle extracting tasks from a given list of variables
     """
-    new_style_tasks = defaultdict(dict)
+    new_style_tasks = _Dict()
     classic_tasks = {}
+    default_task = None
     if 'new_style_tasks' not in state.env:
         state.env.new_style_tasks = False
     for tup in imported_vars:
         name, obj = tup
         if is_task_object(obj):
             state.env.new_style_tasks = True
+            # Honor instance.name
             new_style_tasks[obj.name] = obj
-        elif is_task(tup):
+            # Handle aliasing
+            if obj.aliases is not None:
+                for alias in obj.aliases:
+                    new_style_tasks[alias] = obj
+            # Handle defaults
+            if obj.is_default:
+                default_task = obj
+        elif is_classic_task(tup):
             classic_tasks[name] = obj
         elif is_task_module(obj):
-            docs, newstyle, classic = load_tasks_from_module(obj)
+            docs, newstyle, classic, default = load_tasks_from_module(obj)
             for task_name, task in newstyle.items():
+                if name not in new_style_tasks:
+                    new_style_tasks[name] = _Dict()
                 new_style_tasks[name][task_name] = task
-    return (new_style_tasks, classic_tasks)
+            if default is not None:
+                new_style_tasks[name].default = default
+    return new_style_tasks, classic_tasks, default_task
 
 
 def is_task_module(a):
@@ -306,10 +324,19 @@ def parse_options():
     opts, args = parser.parse_args()
     return parser, opts, args
 
+def _is_task(name, value):
+    """
+    Is the object a task as opposed to e.g. a dict or int?
+    """
+    return is_classic_task((name, value)) or is_task_object(value)
+
 def _sift_tasks(mapping):
     tasks, collections = [], []
     for name, value in mapping.iteritems():
-        (collections if isMappingType(value) else tasks).append(name)
+        if _is_task(name, value):
+            tasks.append(name)
+        elif isMappingType(value):
+            collections.append(name)
     tasks = sorted(tasks)
     collections = sorted(collections)
     return tasks, collections
@@ -324,6 +351,8 @@ def _task_names(mapping):
     tasks, collections = _sift_tasks(mapping)
     for collection in collections:
         module = mapping[collection]
+        if hasattr(module, 'default'):
+            tasks.append(collection)
         join = lambda x: ".".join((collection, x))
         tasks.extend(map(join, _task_names(module)))
     return tasks
@@ -340,7 +369,11 @@ def _crawl(name, mapping):
 
 def crawl(name, mapping):
     try:
-        return _crawl(name, mapping)
+        result = _crawl(name, mapping)
+        # Handle default tasks
+        if isinstance(result, _Dict) and getattr(result, 'default', False):
+            result = result.default
+        return result
     except (KeyError, TypeError):
         return None
 
@@ -486,8 +519,9 @@ def parse_arguments(arguments):
             for pair in _escape_split(',', argstr):
                 k, _, v = pair.partition('=')
                 if _:
-                    # Catch, interpret host/hosts/role/roles/exclude_hosts kwargs
-                    if k in ['host', 'hosts', 'role', 'roles','exclude_hosts']:
+                    # Catch, interpret host/hosts/role/roles/exclude_hosts
+                    # kwargs
+                    if k in ['host', 'hosts', 'role', 'roles', 'exclude_hosts']:
                         if k == 'host':
                             hosts = [v.strip()]
                         elif k == 'hosts':
@@ -535,11 +569,12 @@ def _merge(hosts, roles, exclude=[]):
         role_hosts += value
 
     # Return deduped combo of hosts and role_hosts, preserving order within
-    # them (vs using set(), which may lose ordering).
+    # them (vs using set(), which may lose ordering) and skipping hosts to be
+    # excluded.
     cleaned_hosts = _clean_hosts(list(hosts) + list(role_hosts))
     all_hosts = []
     for host in cleaned_hosts:
-        if host not in all_hosts:
+        if host not in all_hosts and host not in exclude:
             all_hosts.append(host)
     return all_hosts
 
@@ -562,9 +597,8 @@ def get_hosts(command, cli_hosts, cli_roles, cli_exclude_hosts):
     # Decorator-specific hosts/roles go next
     func_hosts = getattr(command, 'hosts', [])
     func_roles = getattr(command, 'roles', [])
-    func_exclude_hosts = getattr(command, 'exclude_hosts', [])
     if func_hosts or func_roles:
-        return _merge(func_hosts, func_roles, func_exclude_hosts)
+        return _merge(func_hosts, func_roles, cli_exclude_hosts)
     # Finally, the env is checked (which might contain globally set lists from
     # the CLI or from module-level code). This will be the empty list if these
     # have not been set -- which is fine, this method should return an empty
@@ -629,9 +663,10 @@ def main():
         for option in env_options:
             state.env[option.dest] = getattr(options, option.dest)
 
-        # Handle --hosts, --roles, --exclude-hosts (comma separated string => list)
+        # Handle --hosts, --roles, --exclude-hosts (comma separated string =>
+        # list)
         for key in ['hosts', 'roles', 'exclude_hosts']:
-            if key in state.env and isinstance(state.env[key], str):
+            if key in state.env and isinstance(state.env[key], basestring):
                 state.env[key] = state.env[key].split(',')
 
         # Handle output control level show/hide
@@ -642,21 +677,15 @@ def main():
             print("Fabric %s" % state.env.version)
             sys.exit(0)
 
-        # Handle case where we were called bare, i.e. just "fab", and print
-        # a help message.
-        actions = (options.list_commands, options.shortlist, options.display,
-            arguments, remainder_arguments)
-        if not any(actions):
-            parser.print_help()
-            sys.exit(1)
-
         # Load settings from user settings file, into shared env dict.
         state.env.update(load_settings(state.env.rcfile))
 
         # Find local fabfile path or abort
         fabfile = find_fabfile()
         if not fabfile and not remainder_arguments:
-            abort("Couldn't find any fabfiles!")
+            abort("""Couldn't find any fabfiles!
+
+Remember that -f can be used to specify fabfile path, and use -h for help.""")
 
         # Store absolute path to fabfile in case anyone needs it
         state.env.real_fabfile = fabfile
@@ -665,8 +694,16 @@ def main():
         # tweaks to env values) and put its commands in the shared commands
         # dict
         if fabfile:
-            docstring, callables = load_fabfile(fabfile)
+            docstring, callables, default = load_fabfile(fabfile)
             state.commands.update(callables)
+
+        # Handle case where we were called bare, i.e. just "fab", and print
+        # a help message.
+        actions = (options.list_commands, options.shortlist, options.display,
+            arguments, remainder_arguments, default)
+        if not any(actions):
+            parser.print_help()
+            sys.exit(1)
 
         # Abort if no commands found
         if not state.commands and not remainder_arguments:
@@ -683,6 +720,7 @@ def main():
         # it overrides use of --list-format if somebody were to specify both
         if options.shortlist:
             options.list_format = 'short'
+            options.list_commands = True
 
         # List available commands
         if options.list_commands:
@@ -694,7 +732,7 @@ def main():
             display_command(options.display)
 
         # If user didn't specify any commands to run, show help
-        if not (arguments or remainder_arguments):
+        if not (arguments or remainder_arguments or default):
             parser.print_help()
             sys.exit(0)  # Or should it exit with error (1)?
 
@@ -720,6 +758,10 @@ def main():
             r = '<remainder>'
             state.commands[r] = lambda: api.run(remainder_command)
             commands_to_run.append((r, [], {}, [], [], []))
+
+        # Ditto for a default, if found
+        if not commands_to_run and default:
+            commands_to_run.append((default.name, [], {}, [], [], []))
 
         if state.output.debug:
             names = ", ".join(x[0] for x in commands_to_run)
@@ -777,7 +819,7 @@ def main():
                 # Split host string and apply to env dict
                 username, hostname, port = interpret_host_string(host)
                 # Log to stdout
-                if state.output.running:
+                if state.output.running and not hasattr(task, 'return_value'):
                     print("[%s] Executing task '%s'" % (host, name))
 
                 if running_parallel(task):

@@ -11,11 +11,29 @@ from fabric import tasks
 from .context_managers import settings
 
 
-def task(func):
+def task(*args, **kwargs):
     """
-    Decorator declaring the wrapped function as a :ref:`new-style task <new-style-tasks>`.
+    Decorator declaring the wrapped function to be a new-style task.
+
+    May be invoked as a simple, argument-less decorator (i.e. ``@task``) or
+    with arguments customizing its behavior (e.g. ``@task(alias='myalias')``).
+
+    Please see the :ref:`new-style task <task-decorator>` documentation for
+    details on how to use this decorator.
+
+    .. versionchanged:: 1.2
+        Added the ``alias``, ``aliases``, ``task_class`` and ``default``
+        keyword arguments. See :ref:`task-decorator-arguments` for details.
     """
-    return tasks.WrappedCallableTask(func)
+    invoked = bool(not args or kwargs)
+    task_class = kwargs.pop("task_class", tasks.WrappedCallableTask)
+    if not invoked:
+        func, args = args[0], ()
+
+    def wrapper(func):
+        return task_class(func, *args, **kwargs)
+
+    return wrapper if invoked else wrapper(func)
 
 
 def hosts(*host_list):
@@ -48,7 +66,7 @@ def hosts(*host_list):
             return func(*args, **kwargs)
         _hosts = host_list
         # Allow for single iterable argument as well as *args
-        if len(_hosts) == 1 and not isinstance(_hosts[0], StringTypes):
+        if len(_hosts) == 1 and not isinstance(_hosts[0], basestring):
             _hosts = _hosts[0]
         inner_decorator.hosts = list(_hosts)
         return inner_decorator
@@ -88,7 +106,7 @@ def roles(*role_list):
             return func(*args, **kwargs)
         _roles = role_list
         # Allow for single iterable argument as well as *args
-        if len(_roles) == 1 and not isinstance(_roles[0], StringTypes):
+        if len(_roles) == 1 and not isinstance(_roles[0], basestring):
             _roles = _roles[0]
         inner_decorator.roles = list(_roles)
         return inner_decorator

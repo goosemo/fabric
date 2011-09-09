@@ -134,14 +134,11 @@ backwards-compatible) as more use-cases are solved and added.
 
     api/contrib/*
 
-Changes from previous versions
-------------------------------
+Changelog
+---------
 
-.. toctree::
-    :maxdepth: 1
-    :glob:
+Please see :doc:`the changelog </changelog>`.
 
-    changes/*
 
 Getting help
 ============
@@ -173,10 +170,10 @@ related news tidbits (e.g. "Hey, check out this neat article on Fabric!").
 Bugs/ticket tracker
 -------------------
 
-To file new bugs or search existing ones, you may visit Fabric's `Redmine
-<http://redmine.org>`_ instance, located at `code.fabfile.org
-<http://code.fabfile.org>`_. Due to issues with spam, you'll need to (quickly
-and painlessly) register an account in order to post new tickets.
+To file new bugs or search existing ones, you may visit Fabric's `Github Issues
+<https://github.com/fabric/fabric/issues>`_ page. This does require a (free, easy to set up) Github account.
+
+.. _irc:
 
 IRC
 ---
