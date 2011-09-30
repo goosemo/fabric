@@ -62,6 +62,7 @@ have already upgraded to Python 2.6/2.7:
     installation
     development
     faq
+    roadmap
 
 Tutorial
 --------
@@ -134,10 +135,17 @@ backwards-compatible) as more use-cases are solved and added.
 
     api/contrib/*
 
+
 Changelog
 ---------
 
 Please see :doc:`the changelog </changelog>`.
+
+
+Roadmap
+-------
+
+Please see :doc:`the roadmap </roadmap>`.
 
 
 Getting help

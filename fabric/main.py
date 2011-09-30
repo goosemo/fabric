@@ -18,12 +18,11 @@ import types
 
 from fabric import api, state  # For checking callables against the API, & easy mocking
 from fabric.contrib import console, files, project  # Ditto
-from fabric.network import denormalize, interpret_host_string, disconnect_all
-from fabric.state import commands, connections, env_options
+from fabric.network import denormalize, interpret_host_string, disconnect_all, normalize_to_string
+from fabric.state import commands, env_options
 from fabric.tasks import Task
 from fabric.utils import abort, indent
-from fabric.decorators import is_parallel, is_sequential, needs_multiprocessing
-from job_queue import Job_Queue
+from job_queue import JobQueue
 
 # One-time calculation of "all internal callables" to avoid doing this on every
 # check of a given fabfile callable (in is_classic_task()).
@@ -605,6 +604,7 @@ def get_hosts(command, cli_hosts, cli_roles, cli_exclude_hosts):
     # list if no hosts have been set anywhere.
     return _merge(state.env['hosts'], state.env['roles'], state.env['exclude_hosts'])
 
+
 def update_output_levels(show, hide):
     """
     Update state.output values as per given comma-separated list of key names.
@@ -622,19 +622,20 @@ def update_output_levels(show, hide):
             state.output[key] = False
 
 
-def running_parallel(task):
+def requires_parallel(task):
     """
-    Returns if the command currently asking to be run is needing to be run in
-    parallel or not.
+    Returns True if given ``task`` should be run in parallel mode.
 
-    After making sure a multiprocessing module has been loaded. The two cases 
-    for a command to run parallel are:
-        if it's not explicitly sequential and whole program is set for parallel
-        if it is explicitly parallel
+    Specifically:
+
+    * It's been explicitly marked with ``@parallel``, or:
+    * It's *not* been explicitly marked with ``@serial`` *and* the global
+      parallel option (``env.parallel``) is set to ``True``.
     """
-    return (('multiprocessing' in sys.modules) and 
-            ((state.env.run_in_parallel and not is_sequential(task)) or
-                (is_parallel(task))))
+    return (
+        (state.env.parallel and not getattr(task, 'serial', False))
+        or getattr(task, 'parallel', False)
+    )
 
 
 def _run_task(task, args, kwargs):
@@ -643,6 +644,28 @@ def _run_task(task, args, kwargs):
         return task.run(*args, **kwargs)
     # Fallback to callable behavior
     return task(*args, **kwargs)
+
+
+def _get_pool_size(task, hosts):
+    # Default parallel pool size (calculate per-task in case variables
+    # change)
+    default_pool_size = state.env.pool_size or len(hosts)
+    # Allow per-task override
+    pool_size = getattr(task, 'pool_size', default_pool_size)
+    # But ensure it's never larger than the number of hosts
+    pool_size = min((pool_size, len(hosts)))
+    # Inform user of final pool size for this task
+    if state.output.debug:
+        msg = "Parallel tasks now using pool size of %d"
+        print msg % state.env.pool_size
+    return pool_size
+
+
+def _parallel_tasks(commands_to_run):
+    return any(map(
+        lambda x: requires_parallel(crawl(x[0], state.commands)),
+        commands_to_run
+    ))
 
 
 def main():
@@ -767,18 +790,15 @@ Remember that -f can be used to specify fabfile path, and use -h for help.""")
             names = ", ".join(x[0] for x in commands_to_run)
             print("Commands to run: %s" % names)
 
-        if state.env.run_in_parallel or needs_multiprocessing():
-            #We want to try to import the multiprocessing module by default.
-            #The state is checked to see if it was specifically requested, and
-            #in that case an error is reported.
+        # Import multiprocessing if needed, erroring out usefully if it can't.
+        if state.env.parallel or _parallel_tasks(commands_to_run):
             try:
                 import multiprocessing
-                
-            except ImportError:
-                state.env.run_in_parallel = False
-                print("Unable to run in parallel as requested.\n" +
-                        "You need the multiprocessing module.\n" +
-                        "Continuing.")
+            except ImportError, e:
+                msg = "At least one task needs to be run in parallel, but the\nmultiprocessing module cannot be imported:"
+                msg += "\n\n\t%s\n\n" % e
+                msg += "Please make sure the module is installed or that the above ImportError is\nfixed."
+                abort(msg)
 
         # At this point all commands must exist, so execute them in order.
         for name, args, kwargs, cli_hosts, cli_roles, cli_exclude_hosts in commands_to_run:
@@ -850,8 +870,7 @@ Remember that -f can be used to specify fabfile path, and use -h for help.""")
                 # Put old user back
                 state.env.user = prev_user
 
-            #only runs if was set to run in parallel, and causes fabric to 
-            #wait to end program until all Processes have returned.
+            # If running in parallel, block until job queue is emptied
             if jobs:
                 jobs.close()
                 jobs.start()

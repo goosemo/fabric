@@ -4,7 +4,10 @@ Convenience decorators for use in fabfiles.
 from __future__ import with_statement
 
 from functools import wraps
+<<<<<<< HEAD
 from types import StringTypes
+=======
+>>>>>>> b761a61e2901e9203ecc3d61c2e40f64a116d0c8
 from Crypto import Random
 
 from fabric import tasks
@@ -124,70 +127,65 @@ def runs_once(func):
     Any function wrapped with this decorator will silently fail to execute the
     2nd, 3rd, ..., Nth time it is called, and will return the value of the
     original run.
+
+    .. warning::
+        This decorator is not compatible with Fabric's :doc:`parallel execution
+        mode </usage/parallel>`; when used alongside
+        `~fabric.decorators.parallel` or :option:`-P`, or when decorating
+        subtasks of parallel tasks, each parallel copy of the decorated task
+        will itself run one time, resulting in multiple runs.
     """
     @wraps(func)
     def decorated(*args, **kwargs):
         if not hasattr(decorated, 'return_value'):
             decorated.return_value = func(*args, **kwargs)
         return decorated.return_value
-
-    runs_sequential(decorated)
-
-    return decorated
+    # Mark as serial (disables parallelism) and return
+    return serial(decorated)
 
 
-_sequential = set()
-def runs_sequential(func):
+def serial(func):
     """
-    Decorator preventing the parallel option from running this function
-    non-sequentally.
+    Forces the wrapped function to always run sequentially, never in parallel.
 
+    This decorator takes precedence over the global value of :ref:`env.parallel
+    <env-parallel>`. However, if a task is decorated with both
+    `~fabric.decorators.serial` *and* `~fabric.decorators.parallel`,
+    `~fabric.decorators.parallel` wins.
+
+    .. versionadded:: 1.3
     """
-    _sequential.add(func.func_name)
-
-    if is_parallel(func):
-        _parallel.remove(func.func_name)
-
+    if not getattr(func, 'parallel', False):
+        func.serial = True
     return func
 
-def is_sequential(func):
-    return func.func_name in _sequential
 
-
-_parallel = set()
-def runs_parallel(with_bubble_of=None):
+def parallel(pool_size=None):
     """
-    Decorator explicitly specifying that a function be run in parallel,
-    since the default mode of operation is to be sequential.
+    Forces the wrapped function to run in parallel, instead of sequentially.
+
+    This decorator takes precedence over the global value of :ref:`env.parallel
+    <env-parallel>`. It also takes precedence over `~fabric.decorators.serial`
+    if a task is decorated with both.
+
+    .. versionadded:: 1.3
     """
     def real_decorator(func):
-
         @wraps(func)
         def inner(*args, **kwargs):
+            # Required for Paramiko/PyCrypto to be happy in multiprocessing
             Random.atfork()
             return func(*args, **kwargs)
-
-        _parallel.add(func.func_name)
-
-        if is_sequential(func):
-            _sequential.remove(func.func_name)
-
-        inner._pool_size = with_bubble_of
-
+        inner.parallel = True
+        inner.serial = False
+        inner.pool_size = pool_size
         return inner
 
-    # Trick to allow for both a dec w/ the optional setting without have to
-    # force it to use ()
-    if type(with_bubble_of) == type(real_decorator):
-        return real_decorator(with_bubble_of)
+    # Allow non-factory-style decorator use (@decorator vs @decorator())
+    if type(pool_size) == type(real_decorator):
+        return real_decorator(pool_size)
 
     return real_decorator
-
-def is_parallel(func):
-    return func.func_name in _parallel
-
-def needs_multiprocessing():
-    return _parallel != set()
 
 
 def with_settings(**kw_settings):

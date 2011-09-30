@@ -1,16 +1,18 @@
 """
-This module provides a Job_queue class, and an example of use. One may drop in
-either multiprocessing Prcoesses or threading Threads, as I have show in the
-test suite.
+Sliding-window-based job/task queue class (& example of use.)
 
+May use ``multiprocessing.Process`` or ``threading.Thread`` objects as queue
+items, though within Fabric itself only ``Process`` objects are used/supported.
 """
 
-from fabric.state import env
-from fabric.network import disconnect_all
 from pprint import pprint
 from Crypto import Random 
+import time
 
-class Job_Queue(object):
+from fabric.state import env, io_sleep
+
+
+class JobQueue(object):
     """
     The goal of this class is to make a queue of processes to run, and go
     through them running X number at any given time. 
@@ -27,9 +29,7 @@ class Job_Queue(object):
         ____________________[~~~~~]
         ___________________________
                                 End 
-
     """
-
     def __init__(self, max_running):
         """
         Setup the class to resonable defaults.
@@ -50,13 +50,12 @@ class Job_Queue(object):
         """
         if self._running:
             return all([x.is_alive() for x in self._running])
-
         else:
             return False
 
     def __len__(self):
         """
-        Just going to use number of jobs as the Job_Queue length.
+        Just going to use number of jobs as the JobQueue length.
         """
         return self._num_of_jobs
     
@@ -73,7 +72,7 @@ class Job_Queue(object):
     def append(self, process):
         """
         Add the Process() to the queue, so that later it can be checked up on.
-        That is if the Job_Queue is still open.
+        That is if the JobQueue is still open.
 
         If the queue is closed, this will just silently do nothing.
         """
@@ -95,10 +94,7 @@ class Job_Queue(object):
 
         To end the loop, there have to be no running procs, and no more procs
         to be run in the queue.
-
-        When all if finished, it will exit the loop, and disconnect_all()
         """
-
         def _advance_the_queue():
             """
             Helper function to do the job of poping a new proc off the queue
@@ -120,17 +116,12 @@ class Job_Queue(object):
 
         if self._debug:
             print("Job queue starting.")
-            print("Job queue intial running queue fill.")
 
         while len(self._running) < self._max:
             _advance_the_queue()
 
         while not self._finished:
-
             while len(self._running) < self._max and self._queued:
-                if self._debug:
-                    print("Job queue running queue filling.")
-              
                 _advance_the_queue()
 
             if not self._all_alive():
@@ -154,8 +145,8 @@ class Job_Queue(object):
                     job.join()
 
                 self._finished = True
+            time.sleep(io_sleep)
 
-        disconnect_all()
 
 #### Sample 
 
@@ -179,7 +170,7 @@ def try_using(parallel_type):
 
 
     # Make a job_queue with a bubble of len 5, and have it print verbosely
-    jobs = Job_Queue(5)
+    jobs = JobQueue(5)
     jobs._debug = True
 
     # Add 20 procs onto the stack

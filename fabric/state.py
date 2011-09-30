@@ -212,20 +212,27 @@ env_options = [
 
     # Parallel execution model flag
     make_option('-P', '--parallel',
+<<<<<<< HEAD
             dest = 'run_in_parallel', 
             action = 'store_true',
             default = False,
             help = ("use the multiprocessing module to fork by hosts, If num "
                 "forks not given, will fork once for each host, and not pool.")
+=======
+            dest='parallel',
+            action='store_true',
+            default=False,
+            help="Default to parallel execution method"
+>>>>>>> b761a61e2901e9203ecc3d61c2e40f64a116d0c8
     ),
 
     # Limits the number of forks the parallel option uses
     make_option('-z', '--pool-size',
-            dest = 'pool_size',
-            type = 'int',
-            metavar = 'FORKS',
-            default = 0,
-            help = "Set the number of forks to use in the pool.",
+            dest='pool_size',
+            type='int',
+            metavar='NUM_FORKS',
+            default=0,
+            help="Number of concurrent processes to use when running in parallel",
     ),
 
     # Abort on prompting flag
@@ -241,6 +248,13 @@ env_options = [
         type=int,
         default=0,
         help="enables a keepalive every n seconds"
+    ),
+
+    # Linewise output
+    make_option('--linewise',
+        action='store_true',
+        default=False,
+        help="Print stdout/stderr line-by-line instead of byte-by-byte"
     ),
 ]
 
