@@ -10,6 +10,7 @@ from Crypto import Random
 import time
 
 from fabric.state import env, io_sleep
+from fabric.utils import abort
 
 
 class JobQueue(object):
@@ -147,7 +148,10 @@ class JobQueue(object):
 
                 self._finished = True
             time.sleep(io_sleep)
-
+	
+    #Check here for error codes
+    if any([job.exitcode != 0 for job in self._completed]):
+         abort()
 
 #### Sample 
 
