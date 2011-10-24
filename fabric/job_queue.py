@@ -149,9 +149,6 @@ class JobQueue(object):
                 self._finished = True
             time.sleep(io_sleep)
 
-	for job in self._completed:
-            print job, job.exitcode
-	
         #Check here for error codes
         if any([job.exitcode != 0 for job in self._completed]):
             abort("A task has failed on at least one host. Aborting.")
